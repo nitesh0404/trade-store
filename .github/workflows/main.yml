@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run unit tests
+        run: pytest -vv
+
+      - name: OSS vulnerability scan (Safety)
+        run: |
+          set -euo pipefail
+          safety check --json > safety-report.json
+
+      - name: Fail on critical vulnerabilities
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report_path = Path("safety-report.json")
+          if not report_path.exists():
+              raise SystemExit("safety-report.json not found")
+
+          data = json.loads(report_path.read_text())
+
+            if isinstance(data, list):
+              vulnerabilities = data
+            else:
+              vulnerabilities = data.get("vulnerabilities", [])
+
+          critical = []
+          for vuln in vulnerabilities:
+              cvss = vuln.get("cvss_score") or vuln.get("cvssv3") or vuln.get("severity") or 0
+              try:
+                  score = float(cvss)
+              except (TypeError, ValueError):
+                  score = 0.0
+              if score >= 9.0:
+                  critical.append(vuln)
+
+          if critical:
+              print(f"Critical vulnerabilities found: {len(critical)}")
+              for vuln in critical:
+                  pkg = vuln.get("package_name", "unknown")
+                  vid = vuln.get("vulnerability_id", "n/a")
+                  score = vuln.get("cvss_score", vuln.get("cvssv3", "n/a"))
+                  print(f"- {pkg} | {vid} | CVSS: {score}")
+              raise SystemExit(1)
+
+          print("No critical vulnerabilities found.")
+          PY
+
+      - name: Regression tests placeholder
+        run: |
+          echo "TODO: wire regression suite (contract/e2e/perf) in a dedicated stage."
