@@ -21,5 +21,3 @@ class TradeResponse(BaseModel):
     expired: bool = False
 
 
-TradeIn = TradeRequest
-TradeRecord = TradeResponse

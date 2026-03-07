@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi import Request
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db, init_db
