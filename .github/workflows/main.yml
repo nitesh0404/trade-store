@@ -29,6 +29,17 @@ jobs:
         run: |
           set -euo pipefail
           safety check --json > safety-report.json
+          safety_exit=0
+          safety check --json > safety-report.json || safety_exit=$?
+
+          if [ "$safety_exit" -ne 0 ] && [ "$safety_exit" -ne 64 ]; then
+            echo "Safety scan failed with unexpected exit code: $safety_exit"
+            exit "$safety_exit"
+          fi
+
+          if [ "$safety_exit" -eq 64 ]; then
+            echo "Safety found vulnerabilities (exit 64). Continuing to critical vulnerability gate."
+          fi
 
       - name: Fail on critical vulnerabilities
         run: |
