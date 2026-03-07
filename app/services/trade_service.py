@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.schemas.trade import TradeIn, TradeRecord
+from app.schemas.trade import TradeRequest, TradeResponse
 
 
 class TradeValidationError(ValueError):
@@ -8,11 +8,11 @@ class TradeValidationError(ValueError):
 
 
 def validate_and_prepare_trade(
-    incoming: TradeIn,
-    current: TradeRecord | None,
+    incoming: TradeRequest,
+    current: TradeResponse | None,
     *,
     today: date | None = None,
-) -> TradeRecord:
+) -> TradeResponse:
     effective_today = today or date.today()
 
     if incoming.maturity_date < effective_today:
@@ -21,9 +21,11 @@ def validate_and_prepare_trade(
     if current is not None and incoming.version < current.version:
         raise TradeValidationError("incoming version is lower than current version")
 
-    return TradeRecord(
+    return TradeResponse(
         trade_id=incoming.trade_id,
         version=incoming.version,
+        counterparty_id=incoming.counterparty_id,
+        book_id=incoming.book_id,
         maturity_date=incoming.maturity_date,
         created_date=effective_today,
     )
