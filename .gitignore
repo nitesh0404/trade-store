@@ -9,4 +9,6 @@ htmlcov/
 venv/
 dist/
 build/
+.idea/
 *.egg-info/
+*.xml
