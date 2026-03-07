@@ -36,4 +36,4 @@ jobs:
 
       - name: Regression tests placeholder
         run: |
-          echo "ToDo: wire regression suite in a dedicated stage."
+          echo "TODO: wire regression suite (contract/e2e/perf) in a dedicated stage."
