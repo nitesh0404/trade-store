@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from datetime import date, timedelta
 
 import pytest
@@ -8,7 +9,7 @@ from app.main import app
 
 
 @pytest.fixture(autouse=True)
-def clear_trade_store() -> None:
+def clear_trade_store() -> Generator[None, None, None]:
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield

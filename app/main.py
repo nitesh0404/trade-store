@@ -1,9 +1,14 @@
+import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db, init_db
+from app.observability.logging import configure_logging
 from app.repositories.trade_repository import (
     get_latest_trade_by_id,
     save_trade,
@@ -13,6 +18,10 @@ from app.security.dependencies import require_trade_read, require_trade_write
 from app.services.trade_service import TradeValidationError, validate_and_prepare_trade
 
 
+configure_logging()
+logger = logging.getLogger("trade_store.api")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -20,6 +29,30 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Trade Store API", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+
+    logger.info(
+        "request completed",
+        extra={
+            "event": "api.request.completed",
+            "request_id": request_id,
+            "http_method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
+
+    response.headers["X-Request-Id"] = request_id
+    return response
 
 
 @app.get("/health", tags=["system"])
@@ -50,9 +83,32 @@ def upsert_trade(trade: TradeRequest, db: Session = Depends(get_db)) -> TradeRes
     try:
         record = validate_and_prepare_trade(incoming=trade, current=current)
     except TradeValidationError as exc:
+        logger.warning(
+            "trade validation rejected",
+            extra={
+                "event": "trade.validation.rejected",
+                "trade_id": trade.trade_id,
+                "incoming_version": trade.version,
+                "counterparty_id": trade.counterparty_id,
+                "book_id": trade.book_id,
+                "reason": exc.reason,
+                **exc.context,
+            },
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     saved = save_trade(db, record)
+    logger.info(
+        "trade accepted",
+        extra={
+            "event": "trade.validation.accepted",
+            "trade_id": saved.trade_id,
+            "version": saved.version,
+            "counterparty_id": saved.counterparty_id,
+            "book_id": saved.book_id,
+            "expired": saved.expired,
+        },
+    )
     return TradeResponse(
         trade_id=saved.trade_id,
         version=saved.version,
